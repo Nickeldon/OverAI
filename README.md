@@ -13,8 +13,12 @@ Local and offline AI interpreter to chat, share and generate images with an AI.
 2. Clone the OverAI repo and install the necessary dependencies
 ```
 git clone https://github.com/Nickeldon/OverAI.git
+```
 
-npm run install //installs dependencies inside the root folder and inside the main folder
+```
+npm i
+cd ./main
+npm i
 ```
 
 3. run the app
