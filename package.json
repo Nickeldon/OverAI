@@ -12,7 +12,6 @@
       "start": "electron-vite preview", 
       "dev": "electron-vite dev", 
       "prebuild": "electron-vite build",
-      "install": "npm i \n cd ./main \n npm i \n echo all dependencies installed"
     }
   }
 
