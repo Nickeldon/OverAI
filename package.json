@@ -1,7 +1,7 @@
 {
 
-  "name": "electron-app",
-  "version": "1.0.0",
+  "name": "overai",
+  "version": "0.0.3",
   "main": "./out/main/index.js",
 
   "devDependencies": {
@@ -11,7 +11,7 @@
     "scripts": {
       "start": "electron-vite preview", 
       "dev": "electron-vite dev", 
-      "prebuild": "electron-vite build",
+      "prebuild": "electron-vite build"
     }
   }
 
