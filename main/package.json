@@ -1,10 +1,10 @@
 {
   "name": "overai-vite",
-  "version": "1.0.0",
-  "description": "An Electron application with Svelte and TypeScript",
+  "version": "0.0.3",
+  "description": "Local and offline AI interpreter to chat, share and generate images with an AI.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "nickeldon",
+  "homepage": "https://github.com/Nickeldon/OverAI",
   "scripts": {
     "format": "prettier --plugin prettier-plugin-svelte --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
