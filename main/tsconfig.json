@@ -7,12 +7,15 @@
     "src/preload/*.d.ts"
   ],
   "compilerOptions": {
+    "declaration": true, // Add this line to enable declaration generation
+    "emitDeclarationOnly": true,
     "verbatimModuleSyntax": true,
     "useDefineForClassFields": true,
     "strict": false,
     "allowJs": true,
     "checkJs": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "allowImportingTsExtensions": true
   },
   "references": [{ "path": "./tsconfig.node.json" }]
 }

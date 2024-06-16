@@ -23,14 +23,17 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
+    "@types/highlight.js": "^10.1.0",
+    "@types/marked": "^6.0.0",
     "highlight.js": "^11.9.0",
+    "marked": "^13.0.0",
     "ollama": "^0.5.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^2.0.0",
     "@electron-toolkit/eslint-config-ts": "^1.0.1",
     "@electron-toolkit/tsconfig": "^1.0.1",
-    "@sveltejs/vite-plugin-svelte": "^3.0.1",
+    "@sveltejs/vite-plugin-svelte": "^3.1.1",
     "@types/node": "^18.19.9",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
