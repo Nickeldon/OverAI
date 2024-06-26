@@ -1,0 +1,12 @@
+<svg width="100" height="100" viewBox="0 0 330 330" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="gradient" x1="200" y1="-200" x2="220" y2="330" gradientUnits="userSpaceOnUse">
+            <animateTransform attributeName="gradientTransform" attributeType="XML" type="rotate" from="0" to="360" dur="3s" repeatCount="indefinite" />
+            <animate attributeName="gradientTransform" attributeType="XML" from="360" to="0" dur="5s" repeatCount="indefinite" begin="3s" />
+            <stop offset="0" stop-color="#480E82"/>
+            <stop offset="0.5" stop-color="#8A3BFF"/>
+            <stop offset="1" stop-color="#D698FD"/>
+        </linearGradient>
+    </defs>
+    <path d="M146.317 15.3775C151.247 -3.98508 178.753 -3.98513 183.683 15.3774L207.429 108.645C209.171 115.486 214.514 120.829 221.355 122.571L314.623 146.317C333.985 151.247 333.985 178.753 314.623 183.683L221.355 207.429C214.514 209.171 209.171 214.514 207.429 221.355L183.683 314.623C178.753 333.985 151.247 333.985 146.317 314.623L122.571 221.355C120.829 214.514 115.486 209.171 108.645 207.429L15.3775 183.683C-3.98508 178.753 -3.98513 151.247 15.3774 146.317L108.645 122.571C115.486 120.829 120.829 115.486 122.571 108.645L146.317 15.3775Z" fill="url(#gradient)" filter="url(#blurFilter)"/>
+</svg>

@@ -25,9 +25,12 @@
     "@electron-toolkit/utils": "^3.0.0",
     "@types/highlight.js": "^10.1.0",
     "@types/marked": "^6.0.0",
+    "clsx": "^2.1.1",
     "highlight.js": "^11.9.0",
     "marked": "^13.0.0",
-    "ollama": "^0.5.1"
+    "ollama": "^0.5.1",
+    "svelte-motion": "^0.12.2",
+    "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^2.0.0",

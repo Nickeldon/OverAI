@@ -2,21 +2,23 @@
   import { onMount } from "svelte";
   import { slide, scale } from "svelte/transition";
   import ollama from "ollama/browser";
-  import { createRequestBox, createResponseBox } from "./components/message.ts";
+  import {
+    createRequestBox,
+    createResponseBox,
+  } from "./lib/components/message.ts";
 
   import { marked } from "marked";
 
-  import { modelFiles, validModels } from "./components/model.ts";
+  import { modelFiles, validModels } from "./lib/components/model.ts";
   import {
     getAvailableModels,
     installModel,
     installedModels,
     removeModelTempFiles,
-  } from "./components/utilities.ts";
+  } from "./lib/components/utilities.ts";
 
-  import { getCodeBlock } from "./components/codeblock.ts";
-
-  console.log(localStorage)
+  import { getCodeBlock } from "./lib/components/codeblock.ts";
+  import ModelCard from "./lib/components/modelCard.svelte";
 
   const userData = JSON.parse(localStorage.getItem("userData")) || {
     lastModel: null,
@@ -24,7 +26,7 @@
     useStock: false,
     removeTempFiles: false,
   };
-  
+
   localStorage.setItem("userData", JSON.stringify(userData));
 
   function updateUserData() {
@@ -50,25 +52,74 @@
 
   let streamMode = true;
 
+  function openModelPopUpMenu() {
+    /*let differ = 50;
+    let delayDiffer = validModels.length * differ;
+
+    validModels.forEach((model) => {
+      if (delayDiffer > 0) {
+        delayDiffer -= differ;
+      }
+      new ModelCard({
+        target: document.querySelector("#model-card"),
+        props: {
+          name: `${model.name} ${model.additionalName}`,
+          description: model.description,
+          OnClick: () => {
+            console.log('starting download')
+          },
+          context: installedModels.includes(model.name)
+            ? model.context || "No data available"
+            : null,
+          loadBar: {
+            initialStatus: "loading",
+            ready: false,
+          },
+          id: model.id,
+          style:
+            "border-top: 1px solid #000; border-top-right-radius: 20px; border-top-left-radius:20px; border-bottom-left-radius: 20px; border-bottom: none;",
+          width: 500,
+          height: 130,
+          intensity: "3, 30",
+          background: "rgba(255, 255, 255, 0.190)",
+          color: "white",
+          ButtonReactivity: {
+            invert: ["65%", "100%"],
+            scale: [1, 1.1],
+          },
+          loadState: true,
+          transition: {
+            in: {
+              type: blur,
+              duration: 500,
+              delay: delayDiffer,
+            },
+          },
+        },
+      });
+    });*/
+
+    modelPopupOpen = true;
+  }
+
   function fetchAvailableModels() {
     getAvailableModels().then(async (modes) => {
       if (modes.length == 0) {
         console.log("No model found");
-        modelPopupOpen = true;
+        openModelPopUpMenu()
         setTimeout(() => loadEventListeners(), 400);
         return;
       } else {
         let promise = new Promise((resolve, _) => {
-          if(installedModels.includes(userData.lastModel)){
+          if (installedModels.includes(userData.lastModel)) {
             actualModel = userData.lastModel;
             resolve(null);
-          }
-          else if (installedModels.includes("llama2")) {
+          } else if (installedModels.includes("llama2")) {
             actualModel = "llama2";
             resolve(null);
           } else {
             console.log("Llama2 not installed");
-            modelPopupOpen = true;
+            openModelPopUpMenu()
             setTimeout(() => {
               loadEventListeners();
               resolve(null);
@@ -85,13 +136,44 @@
             try {
               container.querySelector("button").style.display = "none";
               container.querySelector("img").style.display = "none";
-              (
-                container.querySelector("#model-name") as HTMLSpanElement
-              ).style.top = "10%";
+              let header = container.querySelector(
+                "#model-name"
+              ) as HTMLSpanElement;
+              header.style.top = "10%";
+              header.style.display = "flex";
+              header.style.alignItems = "center";
+              header.style.justifyContent = "center";
+              header.style.flexDirection = "row";
+
               container.querySelector("p").style.color = "white";
               container.querySelector("p").style.left = "40px";
+
               container.querySelector("p").innerHTML =
-                `Parameters: ${model.description.parameters} Size: ${(model.description.size as number).toFixed(2)}GB`;
+                `Parameters: ${model.description.parameters}illion Size: ${(model.description.size as number).toFixed(2)}GB`;
+
+              let delIconCont = document.createElement("div");
+              delIconCont.style.position = "relative";
+              delIconCont.style.top = "0";
+              delIconCont.style.right = "0";
+              delIconCont.style.width = "30px";
+              delIconCont.style.height = "30px";
+              delIconCont.style.display = "flex";
+              delIconCont.style.alignItems = "center";
+              delIconCont.style.justifyContent = "center";
+              delIconCont.style.zIndex = "2";
+              delIconCont.style.cursor = "pointer";
+
+              let delIcon = document.createElement("img");
+              delIcon.src = "./src/lib/assets/icons/delete.svg";
+              delIcon.style.width = "20px";
+              delIcon.style.margin = "0";
+              delIcon.style.marginBottom = "2px";
+              delIcon.style.marginLeft = "10px";
+              delIcon.style.filter = "invert(65%)";
+              delIcon.style.position = "relative";
+              delIcon.style.transition = "all .5s ease-out";
+
+              header.appendChild(delIcon);
             } catch (err) {
               if (err instanceof TypeError) {
                 return;
@@ -147,25 +229,25 @@
     }
   }
 
-  async function MarktoHTML(message: string) {
-    message = message
-      .replace("----", "")
-      .replace(
-        /```(.+?)\n([\s\S]+?)```/g,
-        '<pre><code class="$1">$2</code></pre>'
-      )
-      .replace(/``(.+?)\n([\s\S])``/g, "<code>$1</code>")
-      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-      .replace(/\*(.+?)\*/g, "<i>$1</i>")
-      .replace(/__(.+?)__/g, "<u>$1</u>")
-      .replace(/~~(.+?)~~/g, "<s>$1</s>")
-      .replace(/==(.+?)==/g, "<mark>$1</mark>")
-      .replace("\\n", "<br>")
-      .replace(/#(.+?)/g, "<h1>$1</h1>")
-      .replace(/##(.+?)/g, "<h3>$1</h3>")
-      .replace(/###(.+?)/g, "<h5>$1</h5>");
-    return message;
-  }
+  //async function MarktoHTML(message: string) {
+  //message = message
+  //.replace("----", "")
+  //.replace(
+  ///```(.+?)\n([\s\S]+?)```/g,
+  //'<pre><code class="$1">$2</code></pre>'
+  //)
+  //.replace(/``(.+?)\n([\s\S])``/g, "<code>$1</code>")
+  //.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+  //.replace(/\*(.+?)\*/g, "<i>$1</i>")
+  //.replace(/__(.+?)__/g, "<u>$1</u>")
+  //.replace(/~~(.+?)~~/g, "<s>$1</s>")
+  //.replace(/==(.+?)==/g, "<mark>$1</mark>")
+  //.replace("\\n", "<br>")
+  //.replace(/#(.+?)/g, "<h1>$1</h1>")
+  //.replace(/##(.+?)/g, "<h3>$1</h3>")
+  //.replace(/###(.+?)/g, "<h5>$1</h5>");
+  //  return message;
+  //}
 
   function verifycodeblocks(
     DOMContainer: HTMLParagraphElement,
@@ -319,11 +401,15 @@
 
   function changeUserInterState(forceState: string = null) {
     let bruteForceState: boolean;
-    forceState ? bruteForceState = (String(forceState).toLowerCase() === 'true') : bruteForceState = null;
-    document.querySelectorAll('button')?.forEach((btn: HTMLButtonElement) => {
-      forceState ? btn.disabled = !btn.disabled : btn.disabled = bruteForceState;
+    forceState
+      ? (bruteForceState = String(forceState).toLowerCase() === "true")
+      : (bruteForceState = null);
+    document.querySelectorAll("button")?.forEach((btn: HTMLButtonElement) => {
+      forceState
+        ? (btn.disabled = !btn.disabled)
+        : (btn.disabled = bruteForceState);
     });
-    document.querySelectorAll('input')?.forEach((input: HTMLInputElement) => {
+    document.querySelectorAll("input")?.forEach((input: HTMLInputElement) => {
       input.disabled = !input.disabled;
     });
   }
@@ -338,14 +424,14 @@
       .querySelectorAll("#model-choices div button")
       ?.forEach((btn: HTMLButtonElement) => {
         let model = btn?.id.replace("install-", "");
-        if (validModels.includes(model)) {
+        if (validModels.some((modelobj) => modelobj.name === model)) {
           let status = btn?.nextElementSibling as HTMLParagraphElement;
           let img = btn?.querySelector("img");
           btn?.addEventListener("click", () => {
             status.style.color = "white";
             status.innerHTML = "Installing Model...";
 
-            img.src = "./src/assets/icons/loading.png";
+            img.src = "./src/lib/assets/icons/loading.png";
             img.style.animationPlayState = "running";
 
             btn.disabled = true;
@@ -399,7 +485,7 @@
 
                   btn.style.opacity = "1";
 
-                  img.src = "./src/assets/icons/install.svg";
+                  img.src = "./src/lib/assets/icons/install.svg";
 
                   btn.disabled = false;
                   status.style.left = "14%";
@@ -426,7 +512,7 @@
 
             userData.lastModel = actualModel;
             updateUserData();
-            
+
             modelPopupOpen = false;
           } else {
             console.log("Model not installed");
@@ -472,8 +558,7 @@
     };
 
     if (resp.text) {
-
-      changeUserInterState('true')
+      changeUserInterState("true");
 
       const imgElements = document.querySelectorAll("#img-container img");
       for (let img of imgElements) {
@@ -537,8 +622,8 @@
               0,
               document.getElementById("message-section").scrollHeight
             );
-            
-            changeUserInterState('false')
+
+          changeUserInterState("false");
         });
       } else {
         let doms = createResponseBox(
@@ -562,7 +647,7 @@
               0,
               document.getElementById("message-section").scrollHeight
             );
-            changeUserInterState('false')
+          changeUserInterState("false");
         });
       }
     }
@@ -575,7 +660,7 @@
     userData.lastModel = actualModel;
     updateUserData();
 
-    console.log(localStorage)
+    console.log(localStorage);
 
     if (actualModel) {
       await ollama.create({
@@ -592,6 +677,7 @@
   let supportFileFormats = ["image/png", "image/jpeg", "image/jpg"];
 
   function handleImageRequest() {
+    imgpathHistory = [];
     console.log("handling image request");
 
     document.getElementById("main-input").style.height = "90px";
@@ -648,13 +734,21 @@
 
     Array.from(imageHandler.files).forEach((file) => {
       if (imgpathHistory.includes(file.path)) {
+        if (
+          !document
+            .getElementById("main-input")
+            .querySelector("#img-container")
+            .querySelector("#img-child-container")
+        ) {
+          closeImgContainer();
+        }
         return null;
       }
 
       let childcontainer = document.createElement("div");
       childcontainer.id = "img-child-container";
       childcontainer.style.height = "50px";
-      childcontainer.style.width = "50px";
+      childcontainer.style.width = "auto";
       childcontainer.style.borderRadius = "10px";
       childcontainer.style.backgroundColor = "rgba(86, 86, 86, 0.473)";
       childcontainer.style.backdropFilter = "blur(1px)";
@@ -672,29 +766,41 @@
         img.style.filter = "blur(0px)";
         img.style.transition = "all .5s ease-out";
 
+        let delImgCont = document.createElement("div");
+        delImgCont.style.position = "absolute";
+        delImgCont.style.top = "0";
+        delImgCont.style.right = "0";
+        delImgCont.style.width = "100%";
+        delImgCont.style.height = "100%";
+        delImgCont.style.display = "flex";
+        delImgCont.style.alignItems = "center";
+        delImgCont.style.justifyContent = "center";
+        delImgCont.style.zIndex = "2";
+        delImgCont.style.cursor = "pointer";
+
         let delImg = document.createElement("img");
-        delImg.src = "src/assets/icons/delete.svg";
+        delImg.src = "src/lib/assets/icons/delete.svg";
         delImg.style.height = "30px";
-        delImg.style.position = "absolute";
-        delImg.style.top = "10px";
-        delImg.style.right = "10px";
-        delImg.style.cursor = "pointer";
+        delImg.style.position = "relative";
+        delImg.style.margin = "auto";
         delImg.style.transition = "all .5s ease-out";
         delImg.style.opacity = "0";
-        delImg.style.zIndex = "99";
+        delImg.style.zIndex = "1";
+        delImg.style.pointerEvents = "none";
         delImg.style.transform = "scale(1.1)";
         delImg.id = "del-icn";
-        delImg.onmouseover = () => {
+
+        delImgCont.onmouseover = () => {
           delImg.style.transform = "scale(1)";
           delImg.style.opacity = "1";
           img.style.filter = "blur(2px)";
         };
-        delImg.onmouseout = () => {
+        delImgCont.onmouseout = () => {
           delImg.style.transform = "scale(1.1)";
           delImg.style.opacity = "0";
           img.style.filter = "blur(0px)";
         };
-        delImg.onclick = () => {
+        delImgCont.onclick = () => {
           childcontainer.style.transform = "scale(0.9)";
           childcontainer.style.opacity = "0";
           setTimeout(() => {
@@ -714,7 +820,8 @@
           }, 300);
         };
 
-        childcontainer.appendChild(delImg);
+        delImgCont.appendChild(delImg);
+        childcontainer.appendChild(delImgCont);
         childcontainer.appendChild(img);
       } else {
         console.log("unsupported file type");
@@ -730,30 +837,6 @@
       }
 
       imgpathHistory.push(file.path);
-      /*else if (file.type == 'video/mp4') {
-        let videoicon = document.createElement('img')
-        videoicon.src = 'src/assets/icons/video.svg'
-        videoicon.style.height = '40px'
-        videoicon.style.margin = 'auto'
-
-        childcontainer.appendChild(videoicon)
-      } else if (file.type == 'audio/mpeg') {
-        let audioicon = document.createElement('img')
-        audioicon.src = 'src/assets/icons/audio.svg'
-        audioicon.style.height = '40px'
-        audioicon.style.margin = 'auto'
-
-        childcontainer.appendChild(audioicon)
-      } else {
-        let text = document.createElement('p')
-        text.innerHTML = file.name
-        text.style.height = '50px'
-        text.style.borderRadius = '10px'
-        text.style.margin = '0 10px 0 10px'
-        text.style.textAlign = 'center'
-
-        childcontainer.appendChild(text)
-      }*/
       imgcontainer.appendChild(childcontainer);
     });
     imageHandler.value = "";
@@ -768,7 +851,7 @@
 
 <link
   rel="stylesheet"
-  href="./src/assets/packages/highlightjs/default.min.css"
+  href="./src/lib/assets/packages/highlightjs/default.min.css"
 />
 
 <body style="background-color: transparent;">
@@ -808,7 +891,7 @@
                 >Advanced chat model <br /> that can read images</span
               >
               <button id="install-llava">
-                <img src="./src/assets/icons/install.svg" alt="install" />
+                <img src="./src/lib/assets/icons/install.svg" alt="install" />
               </button>
               <p id="status"></p>
             </div>
@@ -817,7 +900,7 @@
               <span id="model-name">Mistral</span>
               <span id="model-descrip">Ideal for coding</span>
               <button id="install-mistral">
-                <img src="./src/assets/icons/install.svg" alt="install" />
+                <img src="./src/lib/assets/icons/install.svg" alt="install" />
               </button>
               <p id="status"></p>
             </div>
@@ -826,7 +909,7 @@
               <span id="model-name">LLama3</span>
               <span id="model-descrip"> Advanced Chat Model </span>
               <button id="install-llama3">
-                <img src="./src/assets/icons/install.svg" alt="install" />
+                <img src="./src/lib/assets/icons/install.svg" alt="install" />
               </button>
               <p id="status"></p>
             </div>
@@ -835,7 +918,7 @@
               <span id="model-name">LLama2</span>
               <span id="model-descrip">Basic Chat Model</span>
               <button id="install-llama2">
-                <img src="./src/assets/icons/install.svg" alt="install" />
+                <img src="./src/lib/assets/icons/install.svg" alt="install" />
               </button>
               <p id="status"></p>
             </div>
@@ -844,7 +927,7 @@
               <span id="model-name">LLama1</span>
               <span id="model-descrip">Rudimentary Chat Model</span>
               <button id="install-llama1">
-                <img src="./src/assets/icons/install.svg" alt="install" />
+                <img src="./src/lib/assets/icons/install.svg" alt="install" />
               </button>
               <p id="status"></p>
             </div>
@@ -958,7 +1041,7 @@
             on:click={() => document.getElementById("img-handler").click()}
           >
             <img
-              src="src/assets/icons/add-img.svg"
+              src="src/lib/assets/icons/add-img.svg"
               style="transition: all .5s ease-out; height: 30px;"
               alt="img"
             /></button
@@ -979,7 +1062,7 @@
           >
             <i>
               <img
-                src="src/assets/icons/send.svg"
+                src="src/lib/assets/icons/send.svg"
                 style="height: 25px; vertical-align:middle;"
                 alt="send"
                 id="send-btn"
@@ -992,4 +1075,4 @@
   </div>
 </body>
 
-<link rel="stylesheet" href="./src/components/mainstyles.css" />
+<link rel="stylesheet" href="./src/lib/components/mainstyles.css" />

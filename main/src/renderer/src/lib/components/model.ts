@@ -195,4 +195,41 @@
   `
   }
 
-  export const validModels = ['llama1', 'llama2', 'llama3', 'mistral', 'llava']
+  export let validModels = [
+    {
+      name: "LLaMa 1",
+      additionalName: "",
+      description: "Rudimentary Chat Model by Meta",
+      id: Math.random().toString(36).substring(7),
+      context: null,
+    },
+    {
+      name: "LLaMa 2",
+      additionalName: "7B",
+      description: "Basic Chat Model by Meta",
+      id: Math.random().toString(36).substring(7),
+      context: null,
+    },
+    {
+      name: "LLaMa 3",
+      additionalName: "8B",
+      description: "Advanced Chat Model by Meta",
+      id: Math.random().toString(36).substring(7),
+      context: null,
+    },
+    {
+      name: "Mistral",
+      additionalName: "8B",
+      description: "Advanced Chat Model by Mistral AI",
+      id: Math.random().toString(36).substring(7),
+      context: null,
+    },
+    {
+      name: "LLaVa",
+      additionalName: "",
+      description: "Advanced Model that can read images",
+      id: Math.random().toString(36).substring(7),
+      context: null,
+    },
+  ];
+
