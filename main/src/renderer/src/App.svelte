@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { slide, scale } from "svelte/transition";
+  import { slide, scale, fly } from "svelte/transition";
+  import { quintOut } from 'svelte/easing';  
   import ollama from "ollama/browser";
   import {
     createRequestBox,
@@ -15,10 +16,12 @@
     installModel,
     installedModels,
     removeModelTempFiles,
+    getSpecificContext,
   } from "./lib/components/utilities.ts";
 
   import { getCodeBlock } from "./lib/components/codeblock.ts";
   import ModelCard from "./lib/components/modelCard.svelte";
+  import Option from "./lib/components/option.svelte";
 
   const userData = JSON.parse(localStorage.getItem("userData")) || {
     lastModel: null,
@@ -39,6 +42,10 @@
 
   let modelPopupOpen = false;
 
+  let autoSelectAtInstall = false;
+
+  let modelPopupKey = {};
+
   let removeTempFiles = false;
 
   let actualModel;
@@ -50,130 +57,152 @@
     llama: [],
   };
 
+  let responseStatus:boolean = false;
+
+  let useBasicOptions = false;
+
   let streamMode = true;
 
+  let options: Array<optionObject> = [
+    {
+      name: "Reset chat",
+      event: () => {
+        let messageSection = document.querySelector("#message-section");
+        while (messageSection?.lastElementChild) {
+          messageSection.removeChild(messageSection.lastElementChild);
+        }
+
+        messages.user = [];
+        messages.llama = [];
+      },
+      type: "promise",
+    },
+    {
+      name: "Change model",
+      event: () => {
+        openModelPopUpMenu();
+        navOpen = false;
+        fetchAvailableModels();
+        setTimeout(() => loadEventListeners(), 400);
+      },
+      type: "promise",
+    },
+
+    {
+      name: "More options",
+      event: openAddopt,
+      type: "promise",
+    },
+
+    {
+      name: "Exit the app",
+      style: "margin-top:100px;",
+      type: "promise",
+      event: () => {
+        console.log("app closed");
+      },
+    },
+  ];
+
+  let addit_opt: Array<optionObject> = [
+    {
+      name: `${!useStock ? "Use Stock Model" : "Use Custom Model"}`,
+      event: () => {
+        useStock = !useStock;
+      },
+      values: ["Use Stock Model", "Use Custom Model"],
+      type: "incrementation",
+    },
+    {
+      name: `${streamMode ? "Disable Stream Mode" : "Enable Stream Mode"}`,
+      event: () => {
+        streamMode = !streamMode;
+      },
+      values: ["Disable Stream Mode", "Enable Stream Mode"],
+      type: "incrementation",
+    },
+    {
+      name: "Auto Select after Install",
+      value: autoSelectAtInstall ? "False" : "True",
+      event: () => {
+        streamMode = !streamMode;
+      },
+      values: ["False", "True"],
+      type: "incrementation",
+    },
+  ];
+
+  function openAddopt() {
+    navOpen = false;
+    useBasicOptions = false;
+    setTimeout(() => {
+      navOpen = true;
+    }, 1100);
+  }
+
   function openModelPopUpMenu() {
-    /*let differ = 50;
-    let delayDiffer = validModels.length * differ;
-
-    validModels.forEach((model) => {
-      if (delayDiffer > 0) {
-        delayDiffer -= differ;
-      }
-      new ModelCard({
-        target: document.querySelector("#model-card"),
-        props: {
-          name: `${model.name} ${model.additionalName}`,
-          description: model.description,
-          OnClick: () => {
-            console.log('starting download')
-          },
-          context: installedModels.includes(model.name)
-            ? model.context || "No data available"
-            : null,
-          loadBar: {
-            initialStatus: "loading",
-            ready: false,
-          },
-          id: model.id,
-          style:
-            "border-top: 1px solid #000; border-top-right-radius: 20px; border-top-left-radius:20px; border-bottom-left-radius: 20px; border-bottom: none;",
-          width: 500,
-          height: 130,
-          intensity: "3, 30",
-          background: "rgba(255, 255, 255, 0.190)",
-          color: "white",
-          ButtonReactivity: {
-            invert: ["65%", "100%"],
-            scale: [1, 1.1],
-          },
-          loadState: true,
-          transition: {
-            in: {
-              type: blur,
-              duration: 500,
-              delay: delayDiffer,
-            },
-          },
-        },
-      });
-    });*/
-
+    //let differ = 50;
+    //let delayDiffer = validModels.length * differ;
     modelPopupOpen = true;
+    setTimeout(() => {
+      let styles = document.getElementById("model-popup-parent").style;
+
+      styles.opacity = "1";
+      styles.transform = "scale(1)";
+      document.getElementById("back-filter").style.backgroundColor =
+        "rgba(0, 0, 0, 0.5)";
+      document.getElementById("back-filter").style.backdropFilter = "blur(3px)";
+    }, 300);
   }
 
   function fetchAvailableModels() {
     getAvailableModels().then(async (modes) => {
       if (modes.length == 0) {
         console.log("No model found");
-        openModelPopUpMenu()
+        openModelPopUpMenu();
         setTimeout(() => loadEventListeners(), 400);
         return;
       } else {
         let promise = new Promise((resolve, _) => {
-          if (installedModels.includes(userData.lastModel)) {
-            actualModel = userData.lastModel;
+          if (
+            installedModels.includes(
+              userData.lastModel.trim().replace(" ", "").toLowerCase()
+            )
+          ) {
+            console.log(userData);
+            actualModel = userData.lastModel
+              .trim()
+              .replace(" ", "")
+              .toLowerCase();
             resolve(null);
           } else if (installedModels.includes("llama2")) {
             actualModel = "llama2";
             resolve(null);
           } else {
             console.log("Llama2 not installed");
-            openModelPopUpMenu()
             setTimeout(() => {
-              loadEventListeners();
               resolve(null);
-            }, 1000);
+            }, 10);
           }
         });
         promise.then(() => {
           modes.forEach((model) => {
             console.log(model);
-            let container: HTMLElement = document.getElementById(
-              "container-" + model.simplified_name
-            );
 
             try {
-              container.querySelector("button").style.display = "none";
-              container.querySelector("img").style.display = "none";
-              let header = container.querySelector(
-                "#model-name"
-              ) as HTMLSpanElement;
-              header.style.top = "10%";
-              header.style.display = "flex";
-              header.style.alignItems = "center";
-              header.style.justifyContent = "center";
-              header.style.flexDirection = "row";
+              validModels.forEach((obj) => {
+                if (
+                  obj.name.toLowerCase().replace(" ", "") ==
+                  model.simplified_name
+                ) {
+                  console.log("true");
+                  obj.context = `Parameters: ${model.description.parameters.replace("B", " B")}illion | Size: ${model.description.size.toFixed(2)}GB`;
+                }
+              });
 
-              container.querySelector("p").style.color = "white";
-              container.querySelector("p").style.left = "40px";
-
-              container.querySelector("p").innerHTML =
-                `Parameters: ${model.description.parameters}illion Size: ${(model.description.size as number).toFixed(2)}GB`;
-
-              let delIconCont = document.createElement("div");
-              delIconCont.style.position = "relative";
-              delIconCont.style.top = "0";
-              delIconCont.style.right = "0";
-              delIconCont.style.width = "30px";
-              delIconCont.style.height = "30px";
-              delIconCont.style.display = "flex";
-              delIconCont.style.alignItems = "center";
-              delIconCont.style.justifyContent = "center";
-              delIconCont.style.zIndex = "2";
-              delIconCont.style.cursor = "pointer";
-
-              let delIcon = document.createElement("img");
-              delIcon.src = "./src/lib/assets/icons/delete.svg";
-              delIcon.style.width = "20px";
-              delIcon.style.margin = "0";
-              delIcon.style.marginBottom = "2px";
-              delIcon.style.marginLeft = "10px";
-              delIcon.style.filter = "invert(65%)";
-              delIcon.style.position = "relative";
-              delIcon.style.transition = "all .5s ease-out";
-
-              header.appendChild(delIcon);
+              setTimeout(() => {
+                loadEventListeners();
+              }, 1000);
             } catch (err) {
               if (err instanceof TypeError) {
                 return;
@@ -419,106 +448,6 @@
     document
       .getElementById("img-handler")
       ?.addEventListener("change", handleImageRequest);
-
-    document
-      .querySelectorAll("#model-choices div button")
-      ?.forEach((btn: HTMLButtonElement) => {
-        let model = btn?.id.replace("install-", "");
-        if (validModels.some((modelobj) => modelobj.name === model)) {
-          let status = btn?.nextElementSibling as HTMLParagraphElement;
-          let img = btn?.querySelector("img");
-          btn?.addEventListener("click", () => {
-            status.style.color = "white";
-            status.innerHTML = "Installing Model...";
-
-            img.src = "./src/lib/assets/icons/loading.png";
-            img.style.animationPlayState = "running";
-
-            btn.disabled = true;
-            btn.style.animationPlayState = "running";
-
-            setTimeout(() => {
-              let loadbarContainer = document.createElement("div");
-              loadbarContainer.style.width = "75%";
-              loadbarContainer.style.height = "1.5px";
-              loadbarContainer.style.backgroundColor =
-                "rgba(255, 255, 255, 0.199)";
-              loadbarContainer.style.backdropFilter = "blur(5px)";
-              loadbarContainer.style.position = "absolute";
-              loadbarContainer.style.bottom = "10%";
-              loadbarContainer.style.right = "10%";
-
-              let loadbar = document.createElement("div");
-              loadbar.style.width = "0%";
-              loadbar.style.height = "100%";
-              loadbar.style.backgroundColor = "rgba(255, 255, 255, 0.699)";
-              loadbar.style.transition = "all 5s ease-out";
-              loadbar.style.marginLeft = "-0.5%";
-              loadbar.style.marginTop = "-0.5%";
-              loadbar.style.borderTopRightRadius = "10px";
-              loadbar.style.borderBottomRightRadius = "10px";
-
-              loadbar.id = "loadbar";
-
-              loadbarContainer.appendChild(loadbar);
-              btn.parentElement.appendChild(loadbarContainer);
-              installModel(model, btn.parentElement)
-                .then(() => {
-                  changeModel(model).then(() => {
-                    if (removeTempFiles) {
-                      removeModelTempFiles(model, btn.parentElement).then(
-                        () => {
-                          modelPopupOpen = false;
-                        }
-                      );
-                    } else {
-                      modelPopupOpen = false;
-                    }
-                  });
-                })
-                .catch((err) => {
-                  loadbarContainer.remove();
-                  img.style.animationPlayState = "paused";
-                  btn.style.animationPlayState = "paused";
-
-                  img.style.transform = "";
-
-                  btn.style.opacity = "1";
-
-                  img.src = "./src/lib/assets/icons/install.svg";
-
-                  btn.disabled = false;
-                  status.style.left = "14%";
-                  status.style.bottom = "12%";
-                  status.style.color = "red";
-                  status.innerHTML = "Failed to install model";
-                  console.log(err);
-                });
-            }, 500);
-          });
-        }
-      });
-
-    document
-      .querySelectorAll("#model-choices div")
-      ?.forEach((div: HTMLDivElement) => {
-        div?.addEventListener("click", () => {
-          let model = div?.id.replace("container-", "");
-          if (installedModels.includes(model)) {
-            console.log("Model installed");
-            console.log(model);
-            actualModel = model.replace("OverAI:", "");
-            formatedMessage = "\\";
-
-            userData.lastModel = actualModel;
-            updateUserData();
-
-            modelPopupOpen = false;
-          } else {
-            console.log("Model not installed");
-          }
-        });
-      });
   }
 
   onMount(() => {
@@ -526,9 +455,28 @@
     fetchAvailableModels();
   });
 
+  async function onModelInstallClick(
+    modelName: string,
+    loadBar: HTMLDivElement,
+    status: HTMLParagraphElement
+  ) {
+    try {
+      await installModel(modelName, loadBar, status);
+
+      if (autoSelectAtInstall) await changeModel(modelName);
+      if (removeTempFiles) {
+        removeModelTempFiles(modelName, loadBar);
+      }
+
+      return await getSpecificContext(modelName);
+    } catch (e) {
+      throw new Error("install failed");
+    }
+  }
+
   function toggleNav() {
-    // Add this function
     console.log("toggling nav");
+    useBasicOptions = true;
     navOpen = !navOpen;
   }
 
@@ -573,7 +521,8 @@
         }
       }
 
-      document.getElementById("await-response").style.visibility = "visible";
+      //document.getElementById("await-response").style.visibility = "visible";
+      responseStatus = true;
       (document.querySelector("#input-box-main") as HTMLInputElement).value =
         "";
       document.getElementById("main-input").style.height = "50px";
@@ -615,7 +564,8 @@
           text.innerHTML = response?.message?.content || "No response";
           document.querySelector("#message-section")?.appendChild(ParMessage);
 
-          document.getElementById("await-response").style.visibility = "hidden";
+          //document.getElementById("await-response").style.visibility = "hidden";
+          responseStatus = false
           document
             .getElementById("message-section")
             .scrollTo(
@@ -640,7 +590,9 @@
         sendResponse(messages.user, TextElement, null).then((response) => {
           messages.llama.push(response as string);
           AIPromptFormat(response, "AI");
-          document.getElementById("await-response").style.visibility = "hidden";
+          //document.getElementById("await-response").style.visibility = "hidden";
+          responseStatus = false
+
           document
             .getElementById("message-section")
             .scrollTo(
@@ -654,6 +606,9 @@
   }
 
   async function changeModel(model: string) {
+    document.getElementById("back-filter").style.backdropFilter = "none";
+    document.getElementById("back-filter").style.background = "none";
+
     actualModel = model.replace("OverAI:", "");
     formatedMessage = "\\";
 
@@ -667,9 +622,11 @@
         model: "OverAI:" + actualModel,
         modelfile: modelFiles[actualModel.toLowerCase()],
       });
+
+      modelPopupOpen = false;
     } else {
       console.log("No model selected");
-      modelPopupOpen = true;
+      openModelPopUpMenu();
     }
   }
 
@@ -842,6 +799,16 @@
     imageHandler.value = "";
   }
 
+  window.addEventListener("keydown", (event) => {
+    if (event.key == "Escape") {
+      document.getElementById("back-filter").style.backdropFilter = "none";
+      document.getElementById("back-filter").style.background = "none";
+      navOpen = false;
+      modelPopupOpen = false;
+      document.getElementById("focus-dummy").focus();
+    }
+  });
+
   $: navBarBorderColor = navOpen ? "gray" : "transparent";
 
   $: discBlurEffect = navOpen || modelPopupOpen ? "3px" : "0px";
@@ -855,85 +822,99 @@
 />
 
 <body style="background-color: transparent;">
+  <!--Very bad coding practice, but I cannot unfocus an element is HTML-->
+  <input
+    type="button"
+    id="focus-dummy"
+    style="pointer-events:none; user-select:none; opacity:0; position:absolute; width:1px; height:1px; top:0; right:0"
+  />
   <div
     id="main"
     style="background-image: radial-gradient(circle, #ffffff, #000000 200%); height:583px; width:1200px; border-radius:20px; margin:auto"
   >
     {#if modelPopupOpen}
-      <div
-        id="model-popup-parent"
-        style="width:100%; height:100%; position:absolute; top:0; left:0; align-items:center; justify-content:center; z-index: 99;"
-        in:scale={{ duration: 500, delay: 400, start: 0.9, opacity: 0 }}
-        out:scale={{ duration: 500, delay: 400, start: 0.9, opacity: 0 }}
-      >
+      {#key modelPopupKey}
         <div
-          id="model-popup"
-          style="width: 600px; height:500px; margin: 0; margin-left:auto; margin-right:auto; background-color:rgba(0, 0, 0, 0.900); backdrop-filter: blur(90px); position: absolute; top: 50%; left:50%; transform: translateY(-50%) translateX(-50%); border-radius:20px"
+          id="model-popup-parent"
+          style="width:100%; height:100%; position:absolute; top:0; left:0; 
+          align-items:center; justify-content:center; z-index: 98;
+          opacity:0; transform:scale(0.9); transition:all .5s ease-in-out;"
+          out:scale={{ duration: 500, start: 0.9, opacity: 0 }}
         >
           <div
+            id="model-popup"
+            style="margin: 0; margin-left:auto; margin-right:auto; 
+          background-color:rgba(0, 0, 0, 0.900); backdrop-filter: blur(90px);
+          top: 50%; left:50%; transform: translateY(-50%) translateX(-50%); border-radius:20px;
+          width:auto; height:80%; margin:auto;
+          display:block; overflow-y:scroll;
+          overflow-x:hidden; align-items:center; justify-content:center;
+          position:absolute; z-index:99; box-shadow: 0 0 10px 1px rgba(170, 170, 170, 0.4)"
+          >
+            {#each validModels as model}
+              <ModelCard
+                name="{model.name} {model.additionalName}"
+                simplified_name={model.name}
+                description={model.description}
+                OnInstall={onModelInstallClick}
+                OnClick={async (modelName) => {
+                  await changeModel(modelName);
+                }}
+                OnFinish={() => {
+                  console.log("install completed");
+                  return null;
+                }}
+                context={installedModels.includes(
+                  model.name.trim().replace(" ", "").toLowerCase()
+                )
+                  ? model.context || "No data available"
+                  : null}
+                loadBar={{
+                  initialStatus: "loading",
+                  ready: false,
+                }}
+                id="{model.id},"
+                style="border-top: 1px solid #000; border-top-right-radius: 20px; border-top-left-radius:20px; border-bottom-left-radius: 20px; border-bottom: none;"
+                width="500"
+                height="130"
+                intensity="3, 30"
+                background="rgba(255, 255, 255, 0.190)"
+                color="white"
+                ButtonReactivity={{
+                  invert: ["65%", "100%"],
+                  scale: [1, 1.1],
+                }}
+                transition={{
+                  in: {
+                    type: blur,
+                    duration: 500,
+                    delay: 0,
+                    opacity: 0,
+                    start: 0,
+                  },
+                  out: {
+                    type: scale,
+                    duration: 1500,
+                    delay: 0,
+                    opacity: 0,
+                    start: 0.95,
+                  },
+                }}
+              />
+            {/each}
+          </div>
+          <div
             id="title-container"
-            style="position: absolute; height:100%; width:100%; top:0; left:0; align-items:center; justify-content:center"
+            style="position: absolute; height:80%; width:50%; top:50%; left:50%; transform: translate(-40%, -50%); align-items:center; justify-content:center; pointer-events:none; user-select:none; z-index:1"
           >
             <h1
-              style="position:relative; font-size:110px; opacity:10%; top:5%; left:-10px; transform:translateY(5%)"
+              style="position:relative; font-size:110px; opacity:5%; color:lightgray; top:5%; left:-10px; transform:translateY(5%)"
             >
               Choose a model
             </h1>
           </div>
-
-          <div
-            id="model-choices"
-            style="align-items:center; justify-content:center; margin-top: 50px; overflow:hidden; height:500px"
-          >
-            <div id="container-llava">
-              <span id="model-name">LLaVa</span>
-              <span id="model-descrip" style="top:25%"
-                >Advanced chat model <br /> that can read images</span
-              >
-              <button id="install-llava">
-                <img src="./src/lib/assets/icons/install.svg" alt="install" />
-              </button>
-              <p id="status"></p>
-            </div>
-
-            <div id="container-mistral">
-              <span id="model-name">Mistral</span>
-              <span id="model-descrip">Ideal for coding</span>
-              <button id="install-mistral">
-                <img src="./src/lib/assets/icons/install.svg" alt="install" />
-              </button>
-              <p id="status"></p>
-            </div>
-
-            <div id="container-llama3">
-              <span id="model-name">LLama3</span>
-              <span id="model-descrip"> Advanced Chat Model </span>
-              <button id="install-llama3">
-                <img src="./src/lib/assets/icons/install.svg" alt="install" />
-              </button>
-              <p id="status"></p>
-            </div>
-
-            <div id="container-llama2">
-              <span id="model-name">LLama2</span>
-              <span id="model-descrip">Basic Chat Model</span>
-              <button id="install-llama2">
-                <img src="./src/lib/assets/icons/install.svg" alt="install" />
-              </button>
-              <p id="status"></p>
-            </div>
-
-            <div id="container-llama1">
-              <span id="model-name">LLama1</span>
-              <span id="model-descrip">Rudimentary Chat Model</span>
-              <button id="install-llama1">
-                <img src="./src/lib/assets/icons/install.svg" alt="install" />
-              </button>
-              <p id="status"></p>
-            </div>
-          </div>
         </div>
-      </div>
+      {/key}
     {/if}
 
     <div
@@ -947,47 +928,36 @@
       {#if navOpen}
         <div
           id="choices"
-          in:slide={{ duration: 1000, delay: 800 }}
+          in:slide={{ duration: 1000, delay: 700 }}
           out:slide={{ duration: 700 }}
         >
-          <button
-            on:click={() => {
-              let messageSection = document.querySelector("#message-section");
-              while (messageSection?.lastElementChild) {
-                messageSection.removeChild(messageSection.lastElementChild);
-              }
+          {#if useBasicOptions}
+            {#each options as opt (opt.name)}
+              <Option
+                name=""
+                value={opt.name}
+                onClick={opt.event || (() => {})}
+                _id={Math.random().toString(36).substring(7)}
+                style={opt.style || ""}
+                selection={opt.values || []}
+                type={opt.type}
+              />
+            {/each}
+          {/if}
 
-              messages.user = [];
-              messages.llama = [];
-            }}
-          >
-            Reset chat
-          </button>
-
-          <button
-            style="background: none; border:none"
-            on:click={() => {
-              modelPopupOpen = true;
-              navOpen = false;
-              fetchAvailableModels();
-              setTimeout(() => loadEventListeners(), 400);
-            }}
-          >
-            Change model
-          </button>
-
-          <button
-            style="margin-left:10px"
-            id="en-Stream-AI-Mode"
-            on:click={() => {
-              streamMode = !streamMode;
-              document.getElementById("en-Stream-AI-Mode").innerHTML =
-                streamMode ? "Disable Stream Mode" : "Enable Stream Mode";
-            }}
-            >{streamMode ? "Disable Stream Mode" : "Enable Stream Mode"}</button
-          >
-
-          <button style="margin-top: 50px;"> Exit the app </button>
+          {#if !useBasicOptions}
+            {#each addit_opt as opt (opt.name)}
+              <Option
+                name={opt.value ? opt.name : ""}
+                value={opt?.value || opt.name}
+                onClick={opt.event || (() => {})}
+                _id={Math.random().toString(36).substring(7)}
+                style="{opt.style || ''},"
+                selection={opt.values || []}
+                type={opt.type}
+              />
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
@@ -998,32 +968,36 @@
     >
       <div
         id="message-section"
-        style="width:100%; height:473px; padding-bottom:20px; overflow-y:scroll; overflow-x:hidden; background-color:transparent; position:relative; right:0;"
+        style="width:100%; height:460px; margin-bottom:13px; padding-bottom:20px; overflow-y:scroll; overflow-x:hidden; background-color:transparent; position:relative; right:0;"
       ></div>
 
       <div
         id="input_section"
         style="height:90px; width:100%; border-top-width: 1.5px; border-top-color:gray; border-top-right-radius: 10px; border-top-left-radius:10px; border-top-style:solid; align-items:center; justify-content: center; background-color:transparent; display:flex; flex-direction: column; margin-bottom: 0; position:relative;"
       >
-        <div
-          id="await-response"
-          style="width:auto; height:18px; align-items:center; position:absolute; left:9%; bottom:100px; display:flex; justify-content: center;"
-        >
+        {#if responseStatus}
           <div
-            class="typing"
-            style="width: 70px; height:18px; margin-bottom:-5%; align-items:center; justify-content: center;"
+            id="await-response"
+            style="width:auto; height:18px; align-items:center; position:absolute; left:9%; bottom:100px; display:flex; justify-content: center; margin-top:20px"
+            in:fly={{delay:200, duration:1000, opacity:0, x:0, y:-20, easing:quintOut}}
+            out:fly={{delay:600, duration:1000, opacity:0, x:0, y:-20, easing:quintOut}}
           >
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+            <div
+              class="typing"
+              style="width: 70px; height:18px; margin-bottom:-5%; align-items:center; justify-content: center;"
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
 
-          <h6
-            style="text-align:right; font-size:18px; color:gray; margin-top:auto; margin-bottom:auto; height:40px; width:auto"
-          >
-            {actualModel} is typing...
-          </h6>
-        </div>
+            <h6
+              style="text-align:right; font-size:18px; color:gray; margin-top:auto; margin-bottom:auto; height:40px; width:auto"
+            >
+              {actualModel} is typing...
+            </h6>
+          </div>
+        {/if}
 
         <input
           type="file"
@@ -1072,6 +1046,10 @@
         </div>
       </div>
     </div>
+    <div
+      style="position: absolute; height:100%; width:100%; top:0; left:0; pointer-events:none; user-select:none; transition:all 1.5s ease-out"
+      id="back-filter"
+    ></div>
   </div>
 </body>
 

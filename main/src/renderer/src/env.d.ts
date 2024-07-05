@@ -7,11 +7,34 @@ declare interface SvelteTransitionObject {
         type: object;
         duration: number;
         delay: number | undefined = undefined
+        opacity: number | undefined = undefined
+        start: number | undefined = undefined
     },
 
     out:{
         type: object;
         duration: number;
         delay: number | undefined = undefined
+        opacity: number | undefined = undefined
+        start: number | undefined = undefined
     }
+}
+
+declare interface modelQuery {
+    simplified_name: string,
+      name: string,
+      description: {
+        parameters: string,
+        size: number,
+        available: boolean
+      }
+}
+
+declare interface optionObject {
+    name: string,
+    event: Function,
+    values?: Array<string>,
+    type: "incrementation" | "promise",
+    style?: string,
+    value?: string
 }

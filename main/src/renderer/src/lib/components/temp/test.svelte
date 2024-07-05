@@ -1,7 +1,7 @@
 <script lang="ts">
-  import ModelCard from "./modelCard.svelte";
+  import ModelCard from "../modelCard.svelte";
   import { onMount } from "svelte";
-  import { slide, fly, blur } from "svelte/transition";
+  import { blur } from "svelte/transition";
 
   let validModels = [
     {
@@ -95,6 +95,11 @@
           loadState: true,
           transition: {
             in: {
+              type: blur,
+              duration: 500,
+              delay: delayDiffer,
+            },
+            out: {
               type: blur,
               duration: 500,
               delay: delayDiffer,
