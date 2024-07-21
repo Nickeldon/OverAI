@@ -38,3 +38,13 @@ declare interface optionObject {
     style?: string,
     value?: string
 }
+
+declare interface userDataObject {
+    lastModel: string,
+    streamMode: boolean,
+    useStock: boolean,
+    removeTempFiles: boolean,
+    autoSelInstall: boolean,
+    rmTempFiles: boolean,
+    theme: "light" | "dark"
+}

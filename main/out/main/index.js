@@ -2,6 +2,7 @@
 const electron = require("electron");
 const path = require("path");
 const utils = require("@electron-toolkit/utils");
+const child_process = require("child_process");
 const icon = path.join(__dirname, "../../resources/icon.png");
 function createWindow() {
   const mainWindow = new electron.BrowserWindow({
@@ -44,7 +45,36 @@ electron.app.whenReady().then(() => {
   electron.app.on("browser-window-created", (_, window) => {
     utils.optimizer.watchWindowShortcuts(window);
   });
-  electron.ipcMain.on("ping", () => console.log("pong"));
+  let ol_process = null;
+  electron.ipcMain.on("ollama_serve", (event) => {
+    console.log("serving");
+    ol_process = child_process.spawn("ollama", ["serve"]);
+    ol_process.stdout?.on("data", (data) => {
+      console.log(`stdout: ${data}`);
+      event.sender.send("ollama_serve_response", `Output: ${data}`);
+    });
+    ol_process.stderr?.on("data", (data) => {
+      if (data) {
+        console.log(`stderr: ${data}`);
+        event.sender.send("ollama_serve_response", `STDERR: ${data.message}`);
+        return;
+      }
+    });
+    ol_process.on("error", (error) => {
+      if (error) {
+        console.error(`exec error: ${error}`);
+        event.sender.send("ollama_serve_response", `Error: ${error.message}`);
+        return;
+      }
+    });
+  });
+  electron.app.on("window-all-closed", () => {
+    console.log("closing");
+    if (ol_process) {
+      console.log("killing process");
+      ol_process.kill();
+    }
+  });
   createWindow();
   electron.app.on("activate", function() {
     if (electron.BrowserWindow.getAllWindows().length === 0)

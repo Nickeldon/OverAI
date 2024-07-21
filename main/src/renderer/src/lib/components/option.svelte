@@ -10,8 +10,11 @@
 
   export let selection: Array<string>;
   export let value: string;
+  export let color:"white" | "black";
 
   let index: number;
+
+  console.log(color)
 
   if (!value) {
     index = 0;
@@ -38,7 +41,7 @@
     };
 
     button.onmouseleave = () => {
-      button.style.color = "black";
+      button.style.color = color ? color : "black";
     };
 
     button.onclick = () => {
@@ -61,7 +64,7 @@
   id={_id}
 >
   <button
-    style="background: none; border:none; align-items: center; justify-content: center; text-align:left; cursor:pointer; transition:all 1s ease-out; {style}"
+    style="background: none; border:none; align-items: center; justify-content: center; text-align:left; cursor:pointer; transition:all 1s ease-out; {color ? `color: ${color};` : ""} {style}"
   >
     {name ? `${name}: ` : ""}{value}
   </button>

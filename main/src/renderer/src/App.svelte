@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { slide, scale, fly } from "svelte/transition";
-  import { quintOut } from 'svelte/easing';  
+  import { quintOut } from "svelte/easing";
   import ollama from "ollama/browser";
   import {
     createRequestBox,
@@ -15,6 +15,7 @@
     getAvailableModels,
     installModel,
     installedModels,
+    deleteModel,
     removeModelTempFiles,
     getSpecificContext,
   } from "./lib/components/utilities.ts";
@@ -23,11 +24,16 @@
   import ModelCard from "./lib/components/modelCard.svelte";
   import Option from "./lib/components/option.svelte";
 
-  const userData = JSON.parse(localStorage.getItem("userData")) || {
+  const userData: userDataObject = JSON.parse(
+    localStorage.getItem("userData")
+  ) || {
     lastModel: null,
     streamMode: true,
     useStock: false,
     removeTempFiles: false,
+    autoSelInstall: false,
+    rmTempFiles: false,
+    theme: "dark",
   };
 
   localStorage.setItem("userData", JSON.stringify(userData));
@@ -36,17 +42,13 @@
     localStorage.setItem("userData", JSON.stringify(userData));
   }
 
-  let navOpen = false;
+  let spincount = 0;
 
-  let useStock = false;
+  let navOpen = false;
 
   let modelPopupOpen = false;
 
-  let autoSelectAtInstall = false;
-
   let modelPopupKey = {};
-
-  let removeTempFiles = false;
 
   let actualModel;
 
@@ -57,7 +59,7 @@
     llama: [],
   };
 
-  let responseStatus:boolean = false;
+  let responseStatus: boolean = false;
 
   let useBasicOptions = false;
 
@@ -68,9 +70,13 @@
       name: "Reset chat",
       event: () => {
         let messageSection = document.querySelector("#message-section");
-        while (messageSection?.lastElementChild) {
-          messageSection.removeChild(messageSection.lastElementChild);
-        }
+        messageSection.childNodes.forEach((node: HTMLDivElement) => {
+          node.style.transition = "all .6s ease-out";
+          node.style.marginTop = "20px";
+          node.style.opacity = "0";
+
+          node.ontransitionend = () => messageSection.removeChild(node);
+        });
 
         messages.user = [];
         messages.llama = [];
@@ -106,9 +112,10 @@
 
   let addit_opt: Array<optionObject> = [
     {
-      name: `${!useStock ? "Use Stock Model" : "Use Custom Model"}`,
+      name: `${!userData.useStock ? "Use Stock Model" : "Use Custom Model"}`,
       event: () => {
-        useStock = !useStock;
+        userData.useStock = !userData.useStock;
+        updateUserData();
       },
       values: ["Use Stock Model", "Use Custom Model"],
       type: "incrementation",
@@ -117,20 +124,64 @@
       name: `${streamMode ? "Disable Stream Mode" : "Enable Stream Mode"}`,
       event: () => {
         streamMode = !streamMode;
+        updateUserData();
       },
       values: ["Disable Stream Mode", "Enable Stream Mode"],
       type: "incrementation",
     },
     {
       name: "Auto Select after Install",
-      value: autoSelectAtInstall ? "False" : "True",
+      value: userData.autoSelInstall ? "True" : "False",
       event: () => {
-        streamMode = !streamMode;
+        userData.autoSelInstall = !userData.autoSelInstall;
+        updateUserData();
       },
       values: ["False", "True"],
       type: "incrementation",
     },
+    {
+      name: "Theme",
+      value: userData.theme || "light",
+      event: () => {
+        switchTheme();
+        updateUserData();
+      },
+      values: ["light", "dark"],
+      type: "incrementation",
+    },
   ];
+
+  function switchTheme() {
+    if (userData.theme == "dark") {
+      userData.theme = "light";
+      document.getElementById("main").style.backgroundImage =
+        "radial-gradient(circle, #ffffff, #000000 200%)";
+      (
+        document.querySelector("#main-input") as HTMLDivElement
+      ).style.backgroundColor = "lightgray";
+      (
+        document.querySelector("#main-input input") as HTMLDivElement
+      ).style.color = "black";
+      (
+        document.querySelectorAll("#main-input button")[1] as HTMLDivElement
+      ).style.opacity = "100%";
+    } else {
+      userData.theme = "dark";
+      document.getElementById("main").style.backgroundImage =
+        "radial-gradient(circle, #000000, gray 250%)";
+      document.getElementById("main").style.backgroundImage =
+        "radial-gradient(circle, #000000, gray 250%)";
+      (
+        document.querySelector("#main-input") as HTMLDivElement
+      ).style.backgroundColor = "rgb(90, 90, 90)";
+      (
+        document.querySelector("#main-input input") as HTMLDivElement
+      ).style.color = "white";
+      (
+        document.querySelectorAll("#main-input button")[1] as HTMLDivElement
+      ).style.opacity = "60%";
+    }
+  }
 
   function openAddopt() {
     navOpen = false;
@@ -141,8 +192,6 @@
   }
 
   function openModelPopUpMenu() {
-    //let differ = 50;
-    //let delayDiffer = validModels.length * differ;
     modelPopupOpen = true;
     setTimeout(() => {
       let styles = document.getElementById("model-popup-parent").style;
@@ -156,74 +205,108 @@
   }
 
   function fetchAvailableModels() {
-    getAvailableModels().then(async (modes) => {
-      if (modes.length == 0) {
-        console.log("No model found");
-        openModelPopUpMenu();
-        setTimeout(() => loadEventListeners(), 400);
-        return;
-      } else {
-        let promise = new Promise((resolve, _) => {
-          if (
-            installedModels.includes(
-              userData.lastModel.trim().replace(" ", "").toLowerCase()
-            )
-          ) {
-            console.log(userData);
-            actualModel = userData.lastModel
-              .trim()
-              .replace(" ", "")
-              .toLowerCase();
-            resolve(null);
-          } else if (installedModels.includes("llama2")) {
-            actualModel = "llama2";
-            resolve(null);
-          } else {
-            console.log("Llama2 not installed");
-            setTimeout(() => {
-              resolve(null);
-            }, 10);
+    console.log("awaiting for Ollama...");
+    let prevCalled = false;
+    let interval = setInterval(() => {
+      ollama
+        .list()
+        .catch((e) => {
+          if (e.message == "Failed to fetch") {
+            if (!prevCalled) {
+              let window_electron:any = window.electron
+              window_electron.ipc("ollama_serve");
+            }
           }
-        });
-        promise.then(() => {
-          modes.forEach((model) => {
-            console.log(model);
+          prevCalled = true;
+          console.log("message: ", e.message);
+        })
+        .then(() => {
+          clearInterval(interval);
 
-            try {
-              validModels.forEach((obj) => {
+          let wait_scr = document.getElementById("await_ollama");
+          wait_scr.style.opacity = "0";
+          wait_scr.addEventListener("transitionend", () => {
+            wait_scr.style.pointerEvents = "none";
+            wait_scr.style.userSelect = "none";
+            wait_scr.style.display = "none";
+          });
+
+          getAvailableModels().then(async (modes) => {
+            if (modes.length == 0) {
+              console.log("No model found");
+              openModelPopUpMenu();
+              setTimeout(() => loadEventListeners(), 400);
+              return;
+            } else {
+              let promise = new Promise((resolve, _) => {
                 if (
-                  obj.name.toLowerCase().replace(" ", "") ==
-                  model.simplified_name
+                  installedModels.includes(
+                    userData.lastModel.trim().replace(" ", "").toLowerCase()
+                  )
                 ) {
-                  console.log("true");
-                  obj.context = `Parameters: ${model.description.parameters.replace("B", " B")}illion | Size: ${model.description.size.toFixed(2)}GB`;
+                  actualModel = userData.lastModel
+                    .trim()
+                    .replace(" ", "")
+                    .toLowerCase();
+                  resolve(null);
+                } else if (installedModels.includes("llama2")) {
+                  actualModel = "llama2";
+                  resolve(null);
+                } else {
+                  console.log("Llama2 not installed");
+                  setTimeout(() => {
+                    resolve(null);
+                  }, 10);
                 }
               });
+              promise.then(() => {
+                modes.forEach((model) => {
+                  try {
+                    validModels.forEach((obj) => {
+                      if (
+                        obj.name.toLowerCase().replace(" ", "") ==
+                        model.simplified_name
+                      ) {
+                        console.log("true");
+                        obj.context = `Parameters: ${model.description.parameters.replace("B", " B")}illion | Size: ${model.description.size.toFixed(2)}GB`;
+                      }
+                    });
 
-              setTimeout(() => {
-                loadEventListeners();
-              }, 1000);
-            } catch (err) {
-              if (err instanceof TypeError) {
-                return;
-              } else {
-                console.log(err);
-                return;
-              }
+                    setTimeout(() => {
+                      loadEventListeners();
+                    }, 1000);
+                  } catch (err) {
+                    if (err instanceof TypeError) {
+                      return;
+                    } else {
+                      console.log(err);
+                      return;
+                    }
+                  }
+                });
+              });
+            }
+            if (actualModel) {
+              (async () => {
+                try {
+                  await ollama.create({
+                    model: !userData.useStock
+                      ? "OverAI:" + actualModel
+                      : actualModel,
+                    modelfile: modelFiles[actualModel.toLowerCase()],
+                  });
+                } catch (e) {
+                  console.log(e);
+                }
+              })().catch((error) => {
+                console.log("error", error);
+              });
+            } else {
+              console.log("No model selected");
             }
           });
         });
-      }
-      if (actualModel) {
-        (async () =>
-          await ollama.create({
-            model: !useStock ? "OverAI:" + actualModel : actualModel,
-            modelfile: modelFiles[actualModel.toLowerCase()],
-          }))();
-      } else {
-        console.log("No model selected");
-      }
-    });
+    }, 3000);
   }
 
   function verifyLengthInBounds() {
@@ -360,7 +443,7 @@
       );
 
       let response = await ollama.chat({
-        model: !useStock ? "OverAI:" + actualModel : actualModel,
+        model: !userData.useStock ? "OverAI:" + actualModel : actualModel,
         messages: [
           {
             role: "user",
@@ -448,6 +531,32 @@
     document
       .getElementById("img-handler")
       ?.addEventListener("change", handleImageRequest);
+
+    if (userData.theme == "dark") {
+      document.getElementById("main").style.backgroundImage =
+        "radial-gradient(circle, #000000, gray 250%)";
+      (
+        document.querySelector("#main-input") as HTMLDivElement
+      ).style.backgroundColor = "rgb(90, 90, 90)";
+      (
+        document.querySelector("#main-input input") as HTMLDivElement
+      ).style.color = "white";
+      (
+        document.querySelectorAll("#main-input button")[1] as HTMLDivElement
+      ).style.opacity = "60%";
+    } else {
+      document.getElementById("main").style.backgroundImage =
+        "radial-gradient(circle, #ffffff, #000000 200%)";
+      (
+        document.querySelector("#main-input") as HTMLDivElement
+      ).style.backgroundColor = "lightgray";
+      (
+        document.querySelector("#main-input input") as HTMLDivElement
+      ).style.color = "black";
+      (
+        document.querySelectorAll("#main-input button")[1] as HTMLDivElement
+      ).style.opacity = "100%";
+    }
   }
 
   onMount(() => {
@@ -458,13 +567,15 @@
   async function onModelInstallClick(
     modelName: string,
     loadBar: HTMLDivElement,
-    status: HTMLParagraphElement
+    status: HTMLParagraphElement,
+    speed: HTMLParagraphElement /*,
+    unit:HTMLSpanElement*/
   ) {
     try {
-      await installModel(modelName, loadBar, status);
+      await installModel(modelName, loadBar, status, speed /*, unit*/);
 
-      if (autoSelectAtInstall) await changeModel(modelName);
-      if (removeTempFiles) {
+      if (userData.autoSelInstall) await changeModel(modelName);
+      if (userData.rmTempFiles) {
         removeModelTempFiles(modelName, loadBar);
       }
 
@@ -565,7 +676,7 @@
           document.querySelector("#message-section")?.appendChild(ParMessage);
 
           //document.getElementById("await-response").style.visibility = "hidden";
-          responseStatus = false
+          responseStatus = false;
           document
             .getElementById("message-section")
             .scrollTo(
@@ -591,7 +702,7 @@
           messages.llama.push(response as string);
           AIPromptFormat(response, "AI");
           //document.getElementById("await-response").style.visibility = "hidden";
-          responseStatus = false
+          responseStatus = false;
 
           document
             .getElementById("message-section")
@@ -822,7 +933,7 @@
 />
 
 <body style="background-color: transparent;">
-  <!--Very bad coding practice, but I cannot unfocus an element is HTML-->
+  <!--Very bad coding practice, but I cannot unfocus an element in HTML-->
   <input
     type="button"
     id="focus-dummy"
@@ -830,7 +941,7 @@
   />
   <div
     id="main"
-    style="background-image: radial-gradient(circle, #ffffff, #000000 200%); height:583px; width:1200px; border-radius:20px; margin:auto"
+    style="background-image: radial-gradient(circle, #ffffff, #000000 200%); height:583px; width:1200px; border-radius:20px; margin:auto; transition:background-image 1s ease-out;"
   >
     {#if modelPopupOpen}
       {#key modelPopupKey}
@@ -864,6 +975,7 @@
                   console.log("install completed");
                   return null;
                 }}
+                OnDelete={deleteModel}
                 context={installedModels.includes(
                   model.name.trim().replace(" ", "").toLowerCase()
                 )
@@ -877,7 +989,7 @@
                 style="border-top: 1px solid #000; border-top-right-radius: 20px; border-top-left-radius:20px; border-bottom-left-radius: 20px; border-bottom: none;"
                 width="500"
                 height="130"
-                intensity="3, 30"
+                intensity="3, -30"
                 background="rgba(255, 255, 255, 0.190)"
                 color="white"
                 ButtonReactivity={{
@@ -941,6 +1053,7 @@
                 style={opt.style || ""}
                 selection={opt.values || []}
                 type={opt.type}
+                color={userData.theme == "dark" ? "white" : "black"}
               />
             {/each}
           {/if}
@@ -955,6 +1068,7 @@
                 style="{opt.style || ''},"
                 selection={opt.values || []}
                 type={opt.type}
+                color={userData.theme == "dark" ? "white" : "black"}
               />
             {/each}
           {/if}
@@ -979,8 +1093,22 @@
           <div
             id="await-response"
             style="width:auto; height:18px; align-items:center; position:absolute; left:9%; bottom:100px; display:flex; justify-content: center; margin-top:20px"
-            in:fly={{delay:200, duration:1000, opacity:0, x:0, y:-20, easing:quintOut}}
-            out:fly={{delay:600, duration:1000, opacity:0, x:0, y:-20, easing:quintOut}}
+            in:fly={{
+              delay: 200,
+              duration: 1000,
+              opacity: 0,
+              x: 0,
+              y: -20,
+              easing: quintOut,
+            }}
+            out:fly={{
+              delay: 600,
+              duration: 1000,
+              opacity: 0,
+              x: 0,
+              y: -20,
+              easing: quintOut,
+            }}
           >
             <div
               class="typing"
@@ -1050,6 +1178,66 @@
       style="position: absolute; height:100%; width:100%; top:0; left:0; pointer-events:none; user-select:none; transition:all 1.5s ease-out"
       id="back-filter"
     ></div>
+
+    <div
+      id="await_ollama"
+      style="width: 100%; height:100%; backdrop-filter: blur(10px); background-color:rgba(0, 0, 0, 0.5); position:absolute; border-radius:20px; transition:all 1s ease-out"
+    >
+      <div
+        id="state_ol_load"
+        style="width: 200px; height:80px; position:absolute; bottom:0; left:0; display:flex; flex-direction: row; justify-content: space-between;"
+      >
+        <div
+          id="spinner"
+          style="width: 60px; height:60px; border-radius:50%; margin-left:20px"
+        >
+          <div
+            id="spin_obj"
+            style="background-color:transparent; width:60px; height:60px; border-width:5px; border-radius:50%;  border-style:solid; border-color:white; border-right-color: transparent; border-left-color: transparent; border-bottom-color: transparent; animation:loadingSpin 2s linear infinite; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);"
+            on:animationiteration={() => {
+              let spin_obj = document.getElementById("spin_obj");
+              if (spincount === 3) {
+                spin_obj.style.animationDuration = ".1s";
+                spin_obj.style.animationTimingFunction =
+                  "cubic-bezier(0.4, 0.0, 0.2, 1)";
+                spincount++;
+              } else if (spincount == 2) {
+                spincount++;
+                console.log("passed");
+                spin_obj.style.animationTimingFunction = "none";
+              } else if (spincount > 3 && spincount < 14) {
+                spincount++;
+              } else {
+                spin_obj.style.animationDuration = "2s";
+                spin_obj.style.animationTimingFunction =
+                  "cubic-bezier(0.2, 0.8, 0.2, 1)";
+                spincount = 0;
+              }
+            }}
+          ></div>
+          <div
+            id="ol_logo_cont"
+            style="width: 60px; height:60px; position:absolute; justify-content:center; align-items:center; top:10px; left:30px;"
+          >
+            <img
+              src="src/lib/assets/icons/ollama_icn.png"
+              alt="ol_logo"
+              style="height: 40px; opacity:0; animation: loadingFadeScale 2s infinite alternate; transition:all 1s ease-out"
+            />
+          </div>
+        </div>
+
+        <div
+          id="txt_state"
+          style="width: 130px; height:80px; margin-left:20px; font-size:15px"
+        >
+          <span
+            >Waiting for <br />
+            <span style="font-weight: 700; font-size:17px">Ollama</span></span
+          >
+        </div>
+      </div>
+    </div>
   </div>
 </body>
 

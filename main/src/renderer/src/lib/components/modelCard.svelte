@@ -15,6 +15,8 @@
   export let OnInstall: Function = null;
   export let OnClick: Function = null;
   export let OnFinish: Function = null;
+  export let OnDelete: Function = null;
+  export let OnError: Function = null;
   export let height: number | string = "auto";
   export let width: number | string = "auto";
   export let background: string = "transparent";
@@ -30,15 +32,12 @@
   };
   export let intensity: string;
   export let transition: SvelteTransitionObject | undefined = undefined;
-  
+
   let loadState: boolean = true;
   let isMouseEntered = false;
   let mainId = id;
-
-  //loadKey = {};
-
+  let delbtnClicked = false;
   let downloadReadyCoolDown = 3000;
-
   let animation;
 
   try {
@@ -126,22 +125,49 @@
     loadStatus.style.whiteSpace = "nowrap";
     loadStatus.style.overflow = "hidden";
 
+    let loadSpeedCont = document.createElement('div')
+    loadSpeedCont.style.width = "65px"
+    loadSpeedCont.style.position = "absolute"
+    loadSpeedCont.style.right = "0"
+    loadSpeedCont.style.top = "6px";
+    loadSpeedCont.style.transformOrigin = "right"
+    loadSpeedCont.style.display = "flex"
+    loadSpeedCont.style.flexDirection = "right"
+
+    let loadSpeed = document.createElement("span");
+    loadSpeed.style.fontWeight = "50";
+    loadSpeed.style.fontSize = "13px";
+    loadSpeed.style.opacity = "0.7";
+    loadSpeed.style.position = "relative"
+    loadSpeed.style.transformOrigin = "right"
+
+    /*let loadSpeedUnit = document.createElement('span')
+    loadSpeedUnit.style.fontWeight = "50";
+    loadSpeedUnit.style.fontSize = "13px";
+    loadSpeedUnit.style.opacity = "0.7";
+    loadSpeedUnit.style.position = "absolute"
+    loadSpeedUnit.style.right = "0"
+    loadSpeedUnit.style.transformOrigin = "left"*/
+
     loadbarContainer.appendChild(loadbar);
     loadbarContainer.appendChild(loadStatus);
+    loadSpeedCont.appendChild(loadSpeed);
+    //loadSpeedCont.appendChild(loadSpeedUnit)
+    loadbarContainer.appendChild(loadSpeedCont)
 
     document
       .getElementById(mainId)
       .querySelector("#user-content")
       .appendChild(loadbarContainer);
 
-    return [loadbarContainer, loadbar, loadStatus];
+    return [loadbarContainer, loadbar, loadStatus, loadSpeed/*, loadSpeedUnit*/];
   }
 
   function initLoadingIntro(
     btnImg: HTMLImageElement,
     btnStyles: CSSStyleDeclaration
   ) {
-    let [loadBarContainer, _loadBar, statusCont] = getLoadBars();
+    let [loadBarContainer, _loadBar, statusCont, speedCont/*, UnitCont*/] = getLoadBars();
 
     let status = document.createElement("span");
     status.style.opacity = "0";
@@ -202,6 +228,8 @@
           simplified_name.replace(" ", "").toLowerCase().trim(),
           _loadBar,
           statusCont,
+          speedCont/*,
+          UnitCont*/,
           () => {
             OnFinish().then(() => {
               loadBarContainer.style.opacity = "0";
@@ -211,7 +239,7 @@
           }
         )
           .then((data) => {
-            context = `Parameters: ${data?.parameters.replace("B", " B") || '0 B'}illion | Size: ${data?.size.toFixed(2) || 0.00}GB`
+            context = `Parameters: ${data?.parameters.replace("B", " B") || "0 B"}illion | Size: ${data?.size.toFixed(2) || 0.0}GB`;
             setTimeout(() => {
               btnStyles.opacity = "0";
               loadBarContainer.style.opacity = "0";
@@ -243,9 +271,9 @@
               };
             }, 500);
           })
-          .catch((e:ErrorEvent) => {
+          .catch((e: ErrorEvent) => {
             if (e.message != "install failed") {
-              console.log(e)
+              console.log(e);
               throw new Error(
                 "The OnInstall Event must require three prop being [LoadingBarContainer, loadingBar, statusContainer]"
               );
@@ -308,7 +336,6 @@
   }
 
   function load() {
-
     //loadKey[mainId] = true
     //loadKey = {}
     if (!context) {
@@ -356,6 +383,8 @@
       btnStyles.zIndex = "98";
       btnStyles.width = "22px";
       btnStyles.height = "22px";
+      btnStyles.pointerEvents = "all";
+      btnStyles.userSelect = "all";
 
       let btnImg = document.createElement("img");
       btnImg.style.height = "22px";
@@ -422,6 +451,23 @@
   }
 
   function setComponentContextEvents() {
+    let mainContainer = document.getElementById(mainId);
+    let modelCardBody = mainContainer.querySelector(
+      "#model-card-body"
+    ) as HTMLDivElement;
+    let modelName = mainContainer.querySelector(
+      "#model-name"
+    ) as HTMLSpanElement;
+    let modelContext = mainContainer.querySelector(
+      "#model-context"
+    ) as HTMLSpanElement;
+    let userContent = mainContainer.querySelector(
+      "#user-content"
+    ) as HTMLDivElement;
+    let delTransition = mainContainer.querySelector(
+      "#del-transition"
+    ) as HTMLDivElement;
+
     let contextText = document.createElement("span");
     contextText.innerText = context || "No data available";
     let contextStyles = contextText.style;
@@ -437,119 +483,210 @@
     contextStyles.transition = "all 1s ease-out";
     contextStyles.opacity = "0";
 
-    document
-      .getElementById(mainId)
-      .querySelector("#user-content")
-      .appendChild(contextText);
+    let deletebtnCont = document.createElement("div");
+    deletebtnCont.style.height = "70px";
+    deletebtnCont.style.width = "70px";
+    deletebtnCont.style.borderRadius = "50% 0 0 0";
+    deletebtnCont.style.background =
+      "radial-gradient(circle at bottom right, black, transparent 70%)";
+    deletebtnCont.style.transition = "all 1s ease-out";
+    deletebtnCont.style.zIndex = "99 !important";
+
+    let imgcontainer = document.createElement("button");
+    imgcontainer.style.background = "none";
+    imgcontainer.style.border = "none";
+    imgcontainer.style.cursor = "pointer";
+    imgcontainer.style.position = "absolute";
+    imgcontainer.style.height = "20px";
+    imgcontainer.style.width = "50px";
+    imgcontainer.style.bottom = "10px";
+    imgcontainer.style.right = "10px";
+    imgcontainer.style.alignItems = "center";
+    imgcontainer.style.justifyContent = "center";
+    imgcontainer.style.opacity = ".5";
+    imgcontainer.style.transition = "all 1s ease-out";
+
+    let delete_txt = document.createElement("span");
+    delete_txt.innerText = "delete";
+    delete_txt.style.color = "red";
+    delete_txt.style.position = "absolute";
+    delete_txt.style.display = "block";
+    delete_txt.style.right = "0";
+    delete_txt.style.bottom = "0px";
+    delete_txt.style.fontSize = "15px";
+    delete_txt.style.opacity = "0";
+    delete_txt.style.transition = "all 1s ease-in-out";
+
+    let img = document.createElement("img");
+    img.style.height = "20px";
+    img.style.position = "absolute";
+    img.style.right = "0";
+    img.style.bottom = "0";
+    img.style.filter = "grayscale(100%) invert(100%)";
+    img.style.transition = "all 1s ease-out";
+    img.src = "./src/lib/assets/icons/delete-red.svg";
+
+    const showdel = () => {
+      delete_txt.style.right = "25px";
+      delete_txt.style.opacity = "1";
+      imgcontainer.style.opacity = "1";
+      img.style.filter = "grayscale(10%) invert(0%)";
+    };
+
+    const hidedel = () => {
+      delete_txt.style.right = "0";
+      delete_txt.style.opacity = "0";
+      imgcontainer.style.opacity = "0.5";
+      img.style.filter = "grayscale(100%) invert(100%)";
+    };
+
+    imgcontainer.appendChild(img);
+    imgcontainer.appendChild(delete_txt);
+    deletebtnCont.appendChild(imgcontainer);
+
+    userContent.appendChild(contextText);
+
+    mainContainer.querySelector("#importance-layer").appendChild(deletebtnCont);
+
+    deletebtnCont.onmouseenter = () => {
+      deletebtnCont.style.height = "120px";
+      deletebtnCont.style.width = "120px";
+      showdel();
+    };
+
+    deletebtnCont.onmouseleave = () => {
+      deletebtnCont.style.height = "70px";
+      deletebtnCont.style.width = "70px";
+      hidedel();
+    };
+
+    deletebtnCont.onclick = () => {
+      delbtnClicked = true;
+    };
+
+    imgcontainer.onclick = () => {
+      delete_txt.style.display = "none";
+      imgcontainer.style.pointerEvents = "none";
+      imgcontainer.style.userSelect = "none";
+
+      delTransition.style.opacity = "1";
+      delTransition.style.width = "200%";
+
+      img.style.opacity = "0";
+      img.ontransitionend = () => {
+        img.src = "./src/lib/assets/icons/loading.png";
+        img.style.filter = "grayscale(100%)";
+        img.style.animation = "loadingSpin 2s infinite";
+
+        img.ontransitionend = () => {
+          img.style.opacity = "1";
+
+          if (!OnDelete) {
+            throw new Error(
+              "An async delete function must be provided to pursue the model deletion"
+            );
+          }
+
+          OnDelete(simplified_name.replace(" ", "").trim().toLowerCase())
+            .then(() => {
+              context = null;
+              deletebtnCont.style.opacity = "0";
+
+              deletebtnCont.ontransitionend = () => {
+                load();
+                mainContainer
+                  .querySelector("#importance-layer")
+                  .removeChild(deletebtnCont);
+
+                userContent.removeChild(contextText);
+
+                delTransition.style.opacity = "0";
+                delTransition.style.width = "0%";
+              };
+            })
+            .catch(() => {
+              img.style.opacity = "0";
+              img.style.animation = "none";
+              img.style.transform = "unset";
+              img.style.filter = "grayscale(100%) invert(100%)";
+              img.src = "./src/lib/assets/icons/delete-red.svg";
+
+              img.ontransitionend = () => {
+                img.style.opacity = "1";
+                delete_txt.style.display = "unset";
+                imgcontainer.style.pointerEvents = "all";
+                imgcontainer.style.userSelect = "all";
+                deletebtnCont.style.opacity = "1";
+              };
+
+              delTransition.style.opacity = "0";
+              delTransition.style.width = "0%";
+
+              contextText.style.color = "red";
+              contextText.innerText = "Failed to uninstall model";
+
+              setTimeout(() => {
+                contextText.style.opacity = "0";
+
+                contextText.ontransitionend = () => {
+                  contextText.style.color = "white";
+                  contextText.innerText = context;
+                  contextText.style.opacity = "1";
+                };
+              }, 3000);
+              console.log("Failed to uninstall model");
+            });
+        };
+      };
+    };
 
     setTimeout(() => {
       contextStyles.opacity = "1";
     }, 200);
 
-    document.getElementById(mainId).onmouseenter = () => {
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-card-body") as HTMLDivElement
-      ).style.marginLeft = "5px";
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-name") as HTMLSpanElement
-      ).style.transform = 'translateZ(50px)';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-name") as HTMLSpanElement
-      ).style.textShadow = 'black 5px 3px 10px';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-context") as HTMLSpanElement
-      ).style.transform = 'translateZ(50px)';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-context") as HTMLSpanElement
-      ).style.textShadow = 'black 5px 3px 10px';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#user-content") as HTMLSpanElement
-      ).style.transform = 'translateZ(50px)';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#user-content") as HTMLSpanElement
-      ).style.textShadow = 'black 5px 3px 10px';
+    mainContainer.onmouseenter = () => {
+      modelCardBody.style.marginLeft = "5px";
+      modelName.style.transform = "translateZ(50px)";
+      modelName.style.textShadow = "black 5px 3px 10px";
+      modelContext.style.transform = "translateZ(50px)";
+      modelContext.style.textShadow = "black 5px 3px 10px";
+      userContent.style.transform = "translateZ(50px)";
+      userContent.style.textShadow = "black 5px 3px 10px";
     };
 
-    document.getElementById(mainId).onmouseleave = () => {
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-card-body") as HTMLDivElement
-      ).style.marginLeft = "0px";
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-name") as HTMLSpanElement
-      ).style.transform = 'translateZ(0px)';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-name") as HTMLSpanElement
-      ).style.textShadow = 'none';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-context") as HTMLSpanElement
-      ).style.transform = 'translateZ(0px)';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#model-context") as HTMLSpanElement
-      ).style.textShadow = 'none';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#user-content") as HTMLSpanElement
-      ).style.transform = 'translateZ(0px)';
-
-      (
-        document
-          .getElementById(mainId)
-          .querySelector("#user-content") as HTMLSpanElement
-      ).style.textShadow = 'none';
+    mainContainer.onmouseleave = () => {
+      modelCardBody.style.marginLeft = "0px";
+      modelName.style.transform = "translateZ(0px)";
+      modelName.style.textShadow = "none";
+      modelContext.style.transform = "translateZ(0px)";
+      modelContext.style.textShadow = "none";
+      userContent.style.transform = "translateZ(0px)";
+      userContent.style.textShadow = "none";
     };
 
-    document.getElementById(mainId).onclick = () => {
-      if (!OnClick) {
-        throw new Error("The OnClick Event must be provided to switch models");
-      }
+    mainContainer.onclick = () => {
+      if (!delbtnClicked) {
+        if (!OnClick) {
+          throw new Error(
+            "The OnClick Event must be provided to switch models"
+          );
+        }
 
-      document.getElementById(mainId).style.transition = 'all 2s ease-out'
-      document.getElementById(mainId).style.transform = 'scale(0.95)'
-      document.getElementById(mainId).style.opacity = '0.6'
-      
-      OnClick(simplified_name.replace(' ', '').trim().toLowerCase())
-      .catch((e) => {
-        console.log(e);
-        throw new Error(
-          "The OnClick Event must require one prop being modelName"
+        mainContainer.style.transition = "all 2s ease-out";
+        mainContainer.style.transform = "scale(0.95)";
+        mainContainer.style.opacity = "0.6";
+
+        OnClick(simplified_name.replace(" ", "").trim().toLowerCase()).catch(
+          (e) => {
+            console.log(e);
+            throw new Error(
+              "The OnClick Event must require one prop being modelName"
+            );
+          }
         );
-      });
+      } else {
+        delbtnClicked = false;
+      }
     };
   }
 
@@ -565,7 +702,7 @@
       duration = 0;
       delay = 0;
       start = 0;
-      opacity = 0
+      opacity = 0;
     }
 
     const transformRequest = (type) => {
@@ -604,7 +741,7 @@
     <CardContainer
       bind:isMouseEntered
       {intensity}
-      style="border-radius: 20px; width:{width
+      style="border-radius: 20px; z-index:95; width:{width
         ? width + 'px'
         : width}; height: {height
         ? height + 'px'
@@ -638,7 +775,7 @@
         >
           <div style="width: 100%; height:100%">
             <div
-              style="width:100%; height:100%; display:flex; justify-content:center; align-items:center; font-family: gilroy, sans-serif; transition:all .2s ease-out; position:absolute; bottom:0;"
+              style="width:100%; height:100%; display:flex; justify-content:center; align-items:center; font-family: gilroy, sans-serif; transition:all .2s ease-out; position:absolute; bottom:0; pointer-events:none; user-select:none;"
               id="user-content"
             ></div>
           </div>
@@ -649,12 +786,22 @@
           <CardItem
             {isMouseEntered}
             translateZ={-20}
-            style="font-family: gilroy, sans-serif; max-width:300px; max-height:65px; padding:10px; margin-right:25px; text-align: right; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display:-webkit-box;overflow:hidden; text-overflow:ellipsis; transition:all .5s ease-out;"
+            style="font-family: gilroy, sans-serif; max-width:300px; max-height:65px; padding:10px; margin-right:25px; text-align: right; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display:-webkit-box;overflow:hidden; text-overflow:ellipsis; transition:all .5s ease-out; pointer-events:none; user-select:none;"
             id="model-context"
           >
             {description}
           </CardItem>
         </div>
+        <div
+          id="importance-layer"
+          style="width:auto; height:auto; display:flex; justify-content:center; align-items:center; position:absolute; bottom:0; right:0; z-index:99;"
+        ></div>
+
+        <CardItem
+          translateZ={-20}
+          style="width:0%; height:100%;position:absolute; top:0; right:0; transform-origin: right; transition: all 1s ease-in-out; background-image:linear-gradient(to left, black 50%, transparent 100%); pointer-events:none; user-select:none; opacity:0; "
+          id="del-transition"
+        ></CardItem>
       </CardBody>
     </CardContainer>
   </div>
