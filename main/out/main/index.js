@@ -14,7 +14,7 @@ function createWindow() {
     maximizable: false,
     minimizable: false,
     center: true,
-    show: true,
+    show: false,
     autoHideMenuBar: true,
     resizable: true,
     fullscreenable: false,

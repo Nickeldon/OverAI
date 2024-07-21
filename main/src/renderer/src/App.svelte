@@ -1082,7 +1082,16 @@
     >
       <div
         id="message-section"
-        style="width:100%; height:460px; margin-bottom:13px; padding-bottom:20px; overflow-y:scroll; overflow-x:hidden; background-color:transparent; position:relative; right:0;"
+        style="width:100%; height:460px; margin-bottom:13px; 
+        padding-bottom:20px; overflow-y:scroll; overflow-x:hidden; 
+        background-color:transparent; position:relative; right:0; 
+        mask-image: linear-gradient(
+          to bottom,
+          transparent,
+          black 20%
+        );
+        mask-size: 100% 100%;
+        mask-position: 50% 100%;"
       ></div>
 
       <div
